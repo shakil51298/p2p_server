@@ -5,6 +5,7 @@ require('dotenv').config();
 // Import routes
 const authRoutes = require('./routes/auth');
 const adsRoutes = require('./routes/ads'); 
+const ordersRoutes = require('./routes/orders');
 
 
 
@@ -17,6 +18,7 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/ads', adsRoutes);
+app.use('/api/orders', ordersRoutes);
 
 // Test route
 app.get('/api/test', (req, res) => {
