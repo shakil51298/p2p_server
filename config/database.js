@@ -29,7 +29,7 @@ function initializeDatabase() {
     }
   });
 
-  // Create ads table
+  // Create p2p_ads table
   db.run(`CREATE TABLE IF NOT EXISTS p2p_ads (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -47,7 +47,7 @@ function initializeDatabase() {
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`, (err) => {
     if (err) {
-      console.error('Error creating ads table:', err);
+      console.error('Error creating p2p_ads table:', err);
     } else {
       console.log('✅ Ads table ready');
     }
@@ -70,6 +70,24 @@ function initializeDatabase() {
       console.error('Error creating orders table:', err);
     } else {
       console.log('✅ Orders table ready');
+    }
+  });
+
+  // Create chat_messages table
+  db.run(`CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    sender_id INTEGER NOT NULL,
+    message TEXT NOT NULL,
+    message_type TEXT DEFAULT 'text' CHECK(message_type IN ('text', 'system', 'payment', 'dispute')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders (id),
+    FOREIGN KEY (sender_id) REFERENCES users (id)
+  )`, (err) => {
+    if (err) {
+      console.error('Error creating chat_messages table:', err);
+    } else {
+      console.log('✅ Chat messages table ready');
     }
   });
 }

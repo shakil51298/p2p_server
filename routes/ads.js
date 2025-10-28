@@ -5,6 +5,8 @@ const router = express.Router();
 // GET ALL ACTIVE ADS
 router.get('/marketplace', async (req, res) => {
   try {
+    console.log('🟡 Fetching marketplace ads...');
+    
     const ads = await db.allAsync(`
       SELECT 
         pa.*,
@@ -16,6 +18,8 @@ router.get('/marketplace', async (req, res) => {
       ORDER BY pa.created_at DESC
     `);
 
+    console.log('🟢 Found ads:', ads.length);
+
     // Parse payment_methods from JSON string to array
     const adsWithParsedMethods = ads.map(ad => ({
       ...ad,
@@ -24,8 +28,11 @@ router.get('/marketplace', async (req, res) => {
 
     res.json(adsWithParsedMethods);
   } catch (error) {
-    console.error('Error fetching ads:', error);
-    res.status(500).json({ message: 'Error fetching marketplace ads' });
+    console.error('🔴 Error fetching ads:', error);
+    res.status(500).json({ 
+      message: 'Error fetching marketplace ads: ' + error.message,
+      error: error.toString()
+    });
   }
 });
 
@@ -45,17 +52,25 @@ router.post('/create', async (req, res) => {
       user_id
     } = req.body;
 
-    console.log('🟡 AD CREATE: Received request from user:', user_id);
+    console.log('🟡 AD CREATE: Received request', req.body);
 
     // Validate required fields
-    if (!type || !currency_from || !currency_to || !exchange_rate || !amount_available || !payment_methods || !usert_id) {
+    if (!type || !currency_from || !currency_to || !exchange_rate || !amount_available || !payment_methods || !user_id) {
       return res.status(400).json({ 
-        message: 'All fields including user_id required',
-        received: req.body 
+        message: 'All fields are required',
+        received: {
+          type: !!type,
+          currency_from: !!currency_from,
+          currency_to: !!currency_to,
+          exchange_rate: !!exchange_rate,
+          amount_available: !!amount_available,
+          payment_methods: !!payment_methods,
+          user_id: !!user_id
+        }
       });
     }
 
-  
+    console.log('🟡 Creating ad for user:', user_id);
 
     // Insert new ad
     const result = await db.runAsync(
@@ -77,7 +92,7 @@ router.post('/create', async (req, res) => {
       ]
     );
 
-    console.log('🟢 Ad created successfully for user:', user_id, 'Ad ID:', result.lastID);
+    console.log('🟢 Ad created successfully with ID:', result.lastID);
 
     res.status(201).json({
       message: 'Ad created successfully!',
@@ -85,10 +100,11 @@ router.post('/create', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error creating ad:', error);
+    console.error('🔴 AD CREATE ERROR:', error);
     res.status(500).json({ 
       message: 'Error creating ad: ' + error.message,
-      error: error.toString()
+      error: error.toString(),
+      stack: error.stack
     });
   }
 });
@@ -96,7 +112,11 @@ router.post('/create', async (req, res) => {
 // GET USER'S ADS
 router.get('/my-ads', async (req, res) => {
   try {
-    const user_id = 1; // Demo user ID
+    const user_id = req.query.user_id;
+
+    if (!user_id) {
+      return res.status(400).json({ message: 'user_id is required' });
+    }
 
     const ads = await db.allAsync(`
       SELECT * FROM p2p_ads 
