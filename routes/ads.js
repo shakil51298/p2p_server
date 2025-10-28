@@ -41,21 +41,21 @@ router.post('/create', async (req, res) => {
       min_amount,
       max_amount,
       payment_methods,
-      terms
+      terms,
+      user_id
     } = req.body;
 
-    console.log('Received ad creation request:', req.body);
+    console.log('🟡 AD CREATE: Received request from user:', user_id);
 
     // Validate required fields
-    if (!type || !currency_from || !currency_to || !exchange_rate || !amount_available || !payment_methods) {
+    if (!type || !currency_from || !currency_to || !exchange_rate || !amount_available || !payment_methods || !usert_id) {
       return res.status(400).json({ 
-        message: 'All fields are required',
+        message: 'All fields including user_id required',
         received: req.body 
       });
     }
 
-    // Use user ID 1 for development (first registered user)
-    const user_id = 1;
+  
 
     // Insert new ad
     const result = await db.runAsync(
@@ -77,7 +77,7 @@ router.post('/create', async (req, res) => {
       ]
     );
 
-    console.log('Ad created successfully with ID:', result.lastID);
+    console.log('🟢 Ad created successfully for user:', user_id, 'Ad ID:', result.lastID);
 
     res.status(201).json({
       message: 'Ad created successfully!',
