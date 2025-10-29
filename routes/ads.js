@@ -88,32 +88,7 @@ router.get('/user/:userId', async (req, res) => {
     });
   }
 });
-
-// Update ad status - FIXED: using p2p_ads table
-router.patch('/:adId', async (req, res) => {
-  try {
-    const { adId } = req.params;
-    const { status } = req.body;
-    
-    console.log('🟡 Updating ad status:', adId, status);
-    
-    const result = await db.runAsync(
-      'UPDATE p2p_ads SET status = ?, updated_at = datetime("now") WHERE id = ?',
-      [status, adId]
-    );
-    
-    console.log('✅ Ad status updated');
-    
-    // Get the updated ad
-    const updatedAd = await db.getAsync('SELECT * FROM p2p_ads WHERE id = ?', [adId]);
-    res.json(updatedAd);
-    
-  } catch (error) {
-    console.error('🔴 Error updating ad:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
+// Update ad status - CORRECTED version
 // Delete ad - FIXED: using p2p_ads table
 router.delete('/:adId', async (req, res) => {
   try {
@@ -201,6 +176,54 @@ router.post('/create', async (req, res) => {
       error: error.toString(),
       stack: error.stack
     });
+  }
+});
+
+// Simple pause ad endpoint
+router.post('/:adId/pause', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    console.log('🟡 Pausing ad:', adId);
+    
+    const result = await db.runAsync(
+      'UPDATE p2p_ads SET status = "paused" WHERE id = ?',
+      [adId]
+    );
+    
+    console.log('✅ Ad paused. Changes:', result.changes);
+
+    res.json({
+      success: true,
+      message: 'Ad paused successfully'
+    });
+    
+  } catch (error) {
+    console.error('🔴 Error pausing ad:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Simple resume ad endpoint
+router.post('/:adId/resume', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    console.log('🟡 Resuming ad:', adId);
+    
+    const result = await db.runAsync(
+      'UPDATE p2p_ads SET status = "active" WHERE id = ?',
+      [adId]
+    );
+    
+    console.log('✅ Ad resumed. Changes:', result.changes);
+
+    res.json({
+      success: true,
+      message: 'Ad resumed successfully'
+    });
+    
+  } catch (error) {
+    console.error('🔴 Error resuming ad:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
