@@ -36,7 +36,7 @@ router.get('/marketplace', async (req, res) => {
   }
 });
 
-// Get user's ads - FIXED: using p2p_ads table
+// Get user's ads
 router.get('/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -75,8 +75,7 @@ router.get('/user/:userId', async (req, res) => {
       views: ad.views || 0,
       inquiries: ad.inquiries || 0,
       completed_trades: ad.completed_trades || 0,
-      created_at: ad.created_at,
-      updated_at: ad.updated_at
+      created_at: ad.created_at
     }));
 
     res.json(formattedAds);
@@ -88,17 +87,143 @@ router.get('/user/:userId', async (req, res) => {
     });
   }
 });
-// Update ad status - CORRECTED version
-// Delete ad - FIXED: using p2p_ads table
+
+// Pause ad endpoint - FIXED: removed updated_at
+router.post('/:adId/pause', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    console.log('🟡 Pausing ad:', adId);
+    
+    const result = await db.runAsync(
+      'UPDATE p2p_ads SET status = "paused" WHERE id = ?',
+      [adId]
+    );
+    
+    console.log('✅ Ad paused. Changes:', result.changes);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Ad not found' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Ad paused successfully'
+    });
+    
+  } catch (error) {
+    console.error('🔴 Error pausing ad:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Resume ad endpoint - FIXED: removed updated_at
+router.post('/:adId/resume', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    console.log('🟡 Resuming ad:', adId);
+    
+    const result = await db.runAsync(
+      'UPDATE p2p_ads SET status = "active" WHERE id = ?',
+      [adId]
+    );
+    
+    console.log('✅ Ad resumed. Changes:', result.changes);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Ad not found' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Ad resumed successfully'
+    });
+    
+  } catch (error) {
+    console.error('🔴 Error resuming ad:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update ad details - FIXED: removed updated_at
+router.post('/:adId/update', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    const {
+      title,
+      exchange_rate,
+      amount_available,
+      min_amount,
+      max_amount,
+      payment_methods,
+      terms
+    } = req.body;
+
+    console.log('🟡 UPDATING AD:', adId);
+    console.log('🟡 UPDATE DATA:', req.body);
+
+    // Check if ad exists
+    const existingAd = await db.getAsync('SELECT * FROM p2p_ads WHERE id = ?', [adId]);
+    if (!existingAd) {
+      return res.status(404).json({ error: 'Ad not found' });
+    }
+
+    // Update the ad
+    const result = await db.runAsync(
+      `UPDATE p2p_ads SET 
+        title = ?,
+        exchange_rate = ?,
+        amount_available = ?,
+        min_amount = ?,
+        max_amount = ?,
+        payment_methods = ?,
+        terms = ?
+      WHERE id = ?`,
+      [
+        title || existingAd.title,
+        parseFloat(exchange_rate),
+        parseFloat(amount_available),
+        parseFloat(min_amount),
+        parseFloat(max_amount),
+        JSON.stringify(payment_methods || []),
+        terms || '',
+        adId
+      ]
+    );
+
+    console.log('✅ Ad updated. Changes:', result.changes);
+
+    res.json({
+      success: true,
+      message: 'Ad updated successfully'
+    });
+
+  } catch (error) {
+    console.error('🔴 Error updating ad:', error);
+    res.status(500).json({
+      error: 'Failed to update ad',
+      details: error.message
+    });
+  }
+});
+
+// Delete ad
 router.delete('/:adId', async (req, res) => {
   try {
     const { adId } = req.params;
     console.log('🟡 Deleting ad:', adId);
     
-    await db.runAsync('DELETE FROM p2p_ads WHERE id = ?', [adId]);
+    const result = await db.runAsync('DELETE FROM p2p_ads WHERE id = ?', [adId]);
     
-    console.log('✅ Ad deleted successfully');
-    res.json({ message: 'Ad deleted successfully' });
+    console.log('✅ Ad deleted. Changes:', result.changes);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Ad not found' });
+    }
+    
+    res.json({ 
+      success: true,
+      message: 'Ad deleted successfully' 
+    });
     
   } catch (error) {
     console.error('🔴 Error deleting ad:', error);
@@ -179,50 +304,32 @@ router.post('/create', async (req, res) => {
   }
 });
 
-// Simple pause ad endpoint
-router.post('/:adId/pause', async (req, res) => {
+// Get single ad by ID
+router.get('/:adId', async (req, res) => {
   try {
     const { adId } = req.params;
-    console.log('🟡 Pausing ad:', adId);
+    console.log('🟡 Fetching ad:', adId);
     
-    const result = await db.runAsync(
-      'UPDATE p2p_ads SET status = "paused" WHERE id = ?',
-      [adId]
-    );
-    
-    console.log('✅ Ad paused. Changes:', result.changes);
+    const ad = await db.getAsync(`
+      SELECT 
+        pa.*,
+        u.name as seller_name,
+        u.kyc_status as seller_kyc_status
+      FROM p2p_ads pa
+      JOIN users u ON pa.user_id = u.id
+      WHERE pa.id = ?
+    `, [adId]);
 
-    res.json({
-      success: true,
-      message: 'Ad paused successfully'
-    });
-    
+    if (!ad) {
+      return res.status(404).json({ error: 'Ad not found' });
+    }
+
+    // Parse payment_methods
+    ad.payment_methods = JSON.parse(ad.payment_methods || '[]');
+
+    res.json(ad);
   } catch (error) {
-    console.error('🔴 Error pausing ad:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Simple resume ad endpoint
-router.post('/:adId/resume', async (req, res) => {
-  try {
-    const { adId } = req.params;
-    console.log('🟡 Resuming ad:', adId);
-    
-    const result = await db.runAsync(
-      'UPDATE p2p_ads SET status = "active" WHERE id = ?',
-      [adId]
-    );
-    
-    console.log('✅ Ad resumed. Changes:', result.changes);
-
-    res.json({
-      success: true,
-      message: 'Ad resumed successfully'
-    });
-    
-  } catch (error) {
-    console.error('🔴 Error resuming ad:', error);
+    console.error('🔴 Error fetching ad:', error);
     res.status(500).json({ error: error.message });
   }
 });
