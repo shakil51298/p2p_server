@@ -22,6 +22,9 @@ const io = socketIo(server, {
   }
 });
 
+// Make io accessible to routes
+app.set('io', io);
+
 // Middleware
 app.use(cors({
   origin: "http://localhost:3000",
@@ -107,6 +110,12 @@ app.use('/uploads', express.static('uploads'));
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('🔵 User connected:', socket.id);
+
+  // User joins their personal notification room
+  socket.on('join_user', (userId) => {
+    socket.join(`user_${userId}`);
+    console.log(`🔔 User ${userId} joined notification room`);
+  });
 
   // Join a specific order room
   socket.on('join_order', (orderId) => {

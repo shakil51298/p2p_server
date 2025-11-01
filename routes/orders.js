@@ -92,6 +92,34 @@ router.post('/create', async (req, res) => {
       console.log('🟢 Ad marked as completed');
     }
 
+    // === NOTIFICATION: Notify the seller about new order ===
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        // Get buyer details for notification
+        const buyer = await db.getAsync('SELECT name FROM users WHERE id = ?', [buyer_id]);
+        const buyerName = buyer ? buyer.name : 'Unknown Buyer';
+
+        // Send notification to seller
+        io.to(`user_${ad.user_id}`).emit('new_order', {
+          id: result.lastID,
+          ad_title: ad.title,
+          buyer_id: buyer_id,
+          buyer_name: buyerName,
+          amount: amount,
+          total_price: total_price,
+          currency_from: ad.currency_from,
+          currency_to: ad.currency_to,
+          created_at: new Date().toISOString()
+        });
+        
+        console.log(`🔔 Notification sent to seller ${ad.user_id} for new order`);
+      }
+    } catch (notifyError) {
+      console.error('🔴 Error sending notification:', notifyError);
+      // Don't fail the order creation if notification fails
+    }
+
     res.status(201).json({
       message: 'Order created successfully!',
       order: {
@@ -167,6 +195,42 @@ router.put('/:orderId/status', async (req, res) => {
       'UPDATE orders SET status = ? WHERE id = ?',
       [status, orderId]
     );
+
+    // === NOTIFICATION: Notify both parties about status change ===
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        // Get order details for notification
+        const order = await db.getAsync(`
+          SELECT o.*, pa.user_id as seller_id, o.buyer_id, pa.title as ad_title
+          FROM orders o 
+          JOIN p2p_ads pa ON o.ad_id = pa.id 
+          WHERE o.id = ?
+        `, [orderId]);
+
+        if (order) {
+          // Notify seller
+          io.to(`user_${order.seller_id}`).emit('order_status_updated', {
+            order_id: orderId,
+            status: status,
+            ad_title: order.ad_title,
+            updated_at: new Date().toISOString()
+          });
+
+          // Notify buyer
+          io.to(`user_${order.buyer_id}`).emit('order_status_updated', {
+            order_id: orderId,
+            status: status,
+            ad_title: order.ad_title,
+            updated_at: new Date().toISOString()
+          });
+
+          console.log(`🔔 Status update notifications sent for order ${orderId}`);
+        }
+      }
+    } catch (notifyError) {
+      console.error('🔴 Error sending status notification:', notifyError);
+    }
 
     res.json({ 
       message: 'Order status updated successfully',
