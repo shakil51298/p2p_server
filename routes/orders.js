@@ -92,33 +92,40 @@ router.post('/create', async (req, res) => {
       console.log('🟢 Ad marked as completed');
     }
 
-    // === NOTIFICATION: Notify the seller about new order ===
-    try {
-      const io = req.app.get('io');
-      if (io) {
-        // Get buyer details for notification
-        const buyer = await db.getAsync('SELECT name FROM users WHERE id = ?', [buyer_id]);
-        const buyerName = buyer ? buyer.name : 'Unknown Buyer';
+            // === NOTIFICATION: Notify the seller about new order ===
+        try {
+          const io = req.app.get('io');
+          if (io) {
+            // Get buyer details for notification
+            const buyer = await db.getAsync('SELECT name FROM users WHERE id = ?', [buyer_id]);
+            const buyerName = buyer ? buyer.name : 'Unknown Buyer';
 
-        // Send notification to seller
-        io.to(`user_${ad.user_id}`).emit('new_order', {
-          id: result.lastID,
-          ad_title: ad.title,
-          buyer_id: buyer_id,
-          buyer_name: buyerName,
-          amount: amount,
-          total_price: total_price,
-          currency_from: ad.currency_from,
-          currency_to: ad.currency_to,
-          created_at: new Date().toISOString()
-        });
-        
-        console.log(`🔔 Notification sent to seller ${ad.user_id} for new order`);
-      }
-    } catch (notifyError) {
-      console.error('🔴 Error sending notification:', notifyError);
-      // Don't fail the order creation if notification fails
-    }
+            // Debug: Check what's in the ad object
+            console.log('🔔 AD OBJECT FOR NOTIFICATION:', ad);
+            console.log('🔔 AD TITLE:', ad.title);
+            console.log('🔔 AD CURRENCY_FROM:', ad.currency_from);
+            console.log('🔔 AD CURRENCY_TO:', ad.currency_to);
+
+            // Send notification to seller with proper data
+            io.to(`user_${ad.user_id}`).emit('new_order', {
+              id: result.lastID,
+              ad_title: ad.title || 'Your Ad', // Fallback if title is missing
+              buyer_id: buyer_id,
+              buyer_name: buyerName,
+              amount: amount,
+              total_price: total_price,
+              currency_from: ad.currency_from || 'USD', // Fallback
+              currency_to: ad.currency_to || 'EUR', // Fallback
+              exchange_rate: ad.exchange_rate,
+              created_at: new Date().toISOString()
+            });
+            
+            console.log(`🔔 Notification sent to seller ${ad.user_id} for order ${result.lastID}`);
+            console.log(`🔔 Order details: ${amount} ${ad.currency_from} → ${total_price} ${ad.currency_to}`);
+          }
+        } catch (notifyError) {
+          console.error('🔴 Error sending notification:', notifyError);
+        }
 
     res.status(201).json({
       message: 'Order created successfully!',
