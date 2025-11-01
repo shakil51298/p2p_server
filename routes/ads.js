@@ -334,4 +334,53 @@ router.get('/:adId', async (req, res) => {
   }
 });
 
+
+// Increment ad views when someone views the ad in marketplace
+router.post('/:adId/increment-views', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    console.log('🟡 Incrementing views for ad:', adId);
+    
+    // First, let's check if the ad exists and see its current state
+    const ad = await db.getAsync('SELECT * FROM p2p_ads WHERE id = ?', [adId]);
+    console.log('🟡 Found ad:', ad);
+    
+    if (!ad) {
+      console.log('🔴 Ad not found with ID:', adId);
+      return res.status(404).json({ error: 'Ad not found' });
+    }
+
+    // Check current views
+    const currentViews = ad.views || 0;
+    console.log('🟡 Current views:', currentViews);
+    
+    // Update views
+    const result = await db.runAsync(
+      'UPDATE p2p_ads SET views = ? WHERE id = ?',
+      [currentViews + 1, adId]
+    );
+    
+    console.log('✅ Views incremented. Changes:', result.changes);
+    console.log('✅ New views count:', currentViews + 1);
+    
+    res.json({
+      success: true,
+      message: 'Views incremented',
+      views: currentViews + 1
+    });
+    
+  } catch (error) {
+    console.error('🔴 FULL ERROR incrementing views:');
+    console.error('🔴 Error message:', error.message);
+    console.error('🔴 Error stack:', error.stack);
+    console.error('🔴 Error code:', error.code);
+    
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message,
+      code: error.code
+    });
+  }
+});
+
 module.exports = router;
